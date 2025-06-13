@@ -1,149 +1,184 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import { ArrowLeft, Save, Plus, Minus, Check, X, Timer } from "lucide-react"
-import { Progress } from "@/components/ui/progress"
+import { useState } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { ArrowLeft, Save, Plus, Minus, Check, X, Timer } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { RestTimer } from "./rest-timer";
 
 interface Exercise {
-  name: string
-  targetReps: string
-  sets: number
+  name: string;
+  targetReps: string;
+  sets: number;
 }
 
 interface MobileWorkoutDayProps {
   day: {
-    id: number
-    name: string
-    description: string
-    color: string
-    exercises: Exercise[]
-  }
-  lastWorkout?: any
-  onSave: (workout: any) => void
-  onBack: () => void
+    id: number;
+    name: string;
+    description: string;
+    color: string;
+    exercises: Exercise[];
+  };
+  lastWorkout?: any;
+  onSave: (workout: any) => void;
+  onBack: () => void;
 }
 
-export function MobileWorkoutDay({ day, lastWorkout, onSave, onBack }: MobileWorkoutDayProps) {
-  const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0)
-  const [restTimer, setRestTimer] = useState(0)
-  const [isResting, setIsResting] = useState(false)
+export function MobileWorkoutDay({
+  day,
+  lastWorkout,
+  onSave,
+  onBack,
+}: MobileWorkoutDayProps) {
+  const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
+  const [restTimer, setRestTimer] = useState(0);
+  const [isResting, setIsResting] = useState(false);
   const [exerciseData, setExerciseData] = useState(() => {
-    const initialData: any = {}
+    const initialData: any = {};
     day.exercises.forEach((exercise, exerciseIndex) => {
       initialData[exerciseIndex] = {
         sets: Array(exercise.sets)
           .fill(null)
           .map((_, setIndex) => ({
-            weight: lastWorkout?.exercises?.[exerciseIndex]?.sets?.[setIndex]?.weight || "",
-            reps: lastWorkout?.exercises?.[exerciseIndex]?.sets?.[setIndex]?.reps || "",
+            weight:
+              lastWorkout?.exercises?.[exerciseIndex]?.sets?.[setIndex]
+                ?.weight || "",
+            reps:
+              lastWorkout?.exercises?.[exerciseIndex]?.sets?.[setIndex]?.reps ||
+              "",
             completed: false,
           })),
-      }
-    })
-    return initialData
-  })
+      };
+    });
+    return initialData;
+  });
 
   const [cardioData, setCardioData] = useState({
     type: lastWorkout?.cardio?.type || "",
     duration: lastWorkout?.cardio?.duration || "",
     distance: lastWorkout?.cardio?.distance || "",
     notes: lastWorkout?.cardio?.notes || "",
-  })
+  });
 
-  const [workoutNotes, setWorkoutNotes] = useState(lastWorkout?.notes || "")
+  const [workoutNotes, setWorkoutNotes] = useState(lastWorkout?.notes || "");
+
+  // Añadir después de los estados existentes
+  const [showRestTimer, setShowRestTimer] = useState(false);
+  const [restDuration, setRestDuration] = useState(90);
 
   // Timer para descanso
   useState(() => {
-    let interval: NodeJS.Timeout
+    let interval: NodeJS.Timeout;
     if (isResting && restTimer > 0) {
       interval = setInterval(() => {
         setRestTimer((prev) => {
           if (prev <= 1) {
-            setIsResting(false)
-            return 0
+            setIsResting(false);
+            return 0;
           }
-          return prev - 1
-        })
-      }, 1000)
+          return prev - 1;
+        });
+      }, 1000);
     }
-    return () => clearInterval(interval)
-  })
+    return () => clearInterval(interval);
+  });
 
-  const updateSet = (exerciseIndex: number, setIndex: number, field: "weight" | "reps", value: string) => {
-    setExerciseData((prev) => ({
+  const updateSet = (
+    exerciseIndex: number,
+    setIndex: number,
+    field: "weight" | "reps",
+    value: string
+  ) => {
+    setExerciseData((prev: any) => ({
       ...prev,
       [exerciseIndex]: {
         ...prev[exerciseIndex],
         sets: prev[exerciseIndex].sets.map((set: any, idx: number) =>
-          idx === setIndex ? { ...set, [field]: value } : set,
+          idx === setIndex ? { ...set, [field]: value } : set
         ),
       },
-    }))
-  }
+    }));
+  };
 
   const toggleSetCompleted = (exerciseIndex: number, setIndex: number) => {
-    setExerciseData((prev) => ({
+    const wasCompleted = exerciseData[exerciseIndex].sets[setIndex].completed;
+
+    setExerciseData((prev: any) => ({
       ...prev,
       [exerciseIndex]: {
         ...prev[exerciseIndex],
         sets: prev[exerciseIndex].sets.map((set: any, idx: number) =>
-          idx === setIndex ? { ...set, completed: !set.completed } : set,
+          idx === setIndex ? { ...set, completed: !set.completed } : set
         ),
       },
-    }))
+    }));
 
-    // Iniciar timer de descanso automáticamente
-    if (!exerciseData[exerciseIndex].sets[setIndex].completed) {
-      setRestTimer(90) // 90 segundos de descanso
-      setIsResting(true)
+    // Si se completó la serie (no estaba completada antes), mostrar timer
+    if (!wasCompleted) {
+      setShowRestTimer(true);
     }
-  }
+  };
 
   const handleSave = () => {
     const workout = {
       dayId: day.id,
       dayName: day.name,
-      exercises: Object.entries(exerciseData).map(([exerciseIndex, data]: [string, any]) => ({
-        name: day.exercises[Number.parseInt(exerciseIndex)].name,
-        targetReps: day.exercises[Number.parseInt(exerciseIndex)].targetReps,
-        sets: data.sets,
-      })),
+      exercises: Object.entries(exerciseData).map(
+        ([exerciseIndex, data]: [string, any]) => ({
+          name: day.exercises[Number.parseInt(exerciseIndex)].name,
+          targetReps: day.exercises[Number.parseInt(exerciseIndex)].targetReps,
+          sets: data.sets,
+        })
+      ),
       cardio: cardioData,
       notes: workoutNotes,
       duration: 0,
-    }
+    };
 
-    onSave(workout)
-    onBack()
-  }
+    onSave(workout);
+    onBack();
+  };
 
   const getCompletedSets = () => {
-    let completed = 0
-    let total = 0
+    let completed = 0;
+    let total = 0;
     Object.values(exerciseData).forEach((exercise: any) => {
       exercise.sets.forEach((set: any) => {
-        total++
-        if (set.completed) completed++
-      })
-    })
-    return { completed, total }
-  }
+        total++;
+        if (set.completed) completed++;
+      });
+    });
+    return { completed, total };
+  };
 
-  const { completed, total } = getCompletedSets()
-  const currentExercise = day.exercises[currentExerciseIndex]
-  const currentSets = exerciseData[currentExerciseIndex]?.sets || []
+  const { completed, total } = getCompletedSets();
+  const currentExercise = day.exercises[currentExerciseIndex];
+  const currentSets = exerciseData[currentExerciseIndex]?.sets || [];
 
   const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins}:${secs.toString().padStart(2, "0")}`
-  }
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
@@ -182,8 +217,14 @@ export function MobileWorkoutDay({ day, lastWorkout, onSave, onBack }: MobileWor
                   <span className="font-semibold text-blue-800">Descanso</span>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <span className="text-2xl font-bold text-blue-600">{formatTime(restTimer)}</span>
-                  <Button size="sm" variant="outline" onClick={() => setIsResting(false)}>
+                  <span className="text-2xl font-bold text-blue-600">
+                    {formatTime(restTimer)}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsResting(false)}
+                  >
                     <X className="w-4 h-4" />
                   </Button>
                 </div>
@@ -197,9 +238,11 @@ export function MobileWorkoutDay({ day, lastWorkout, onSave, onBack }: MobileWor
       <div className="px-4 mb-4">
         <div className="flex space-x-2 overflow-x-auto pb-2">
           {day.exercises.map((exercise, index) => {
-            const exerciseSets = exerciseData[index]?.sets || []
-            const completedCount = exerciseSets.filter((set: any) => set.completed).length
-            const isActive = index === currentExerciseIndex
+            const exerciseSets = exerciseData[index]?.sets || [];
+            const completedCount = exerciseSets.filter(
+              (set: any) => set.completed
+            ).length;
+            const isActive = index === currentExerciseIndex;
 
             return (
               <Button
@@ -210,13 +253,15 @@ export function MobileWorkoutDay({ day, lastWorkout, onSave, onBack }: MobileWor
                 onClick={() => setCurrentExerciseIndex(index)}
               >
                 <div className="text-center">
-                  <div className="text-xs font-semibold">{exercise.name.split(" ")[0]}</div>
+                  <div className="text-xs font-semibold">
+                    {exercise.name.split(" ")[0]}
+                  </div>
                   <div className="text-xs opacity-75">
                     {completedCount}/{exercise.sets}
                   </div>
                 </div>
               </Button>
-            )
+            );
           })}
         </div>
       </div>
@@ -227,7 +272,8 @@ export function MobileWorkoutDay({ day, lastWorkout, onSave, onBack }: MobileWor
           <CardHeader className="pb-3">
             <CardTitle className="text-lg">{currentExercise.name}</CardTitle>
             <CardDescription>
-              Objetivo: {currentExercise.targetReps} reps × {currentExercise.sets} series
+              Objetivo: {currentExercise.targetReps} reps ×{" "}
+              {currentExercise.sets} series
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -235,18 +281,28 @@ export function MobileWorkoutDay({ day, lastWorkout, onSave, onBack }: MobileWor
               <div
                 key={setIndex}
                 className={`p-4 border-2 rounded-lg transition-all ${
-                  set.completed ? "bg-green-50 border-green-200" : "bg-white border-gray-200"
+                  set.completed
+                    ? "bg-green-50 border-green-200"
+                    : "bg-white border-gray-200"
                 }`}
               >
                 <div className="flex items-center justify-between mb-3">
-                  <Label className="font-semibold text-base">Serie {setIndex + 1}</Label>
+                  <Label className="font-semibold text-base">
+                    Serie {setIndex + 1}
+                  </Label>
                   <Button
                     size="lg"
                     variant={set.completed ? "default" : "outline"}
                     className="h-12 w-12 rounded-full"
-                    onClick={() => toggleSetCompleted(currentExerciseIndex, setIndex)}
+                    onClick={() =>
+                      toggleSetCompleted(currentExerciseIndex, setIndex)
+                    }
                   >
-                    {set.completed ? <Check className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+                    {set.completed ? (
+                      <Check className="w-5 h-5" />
+                    ) : (
+                      <Plus className="w-5 h-5" />
+                    )}
                   </Button>
                 </div>
 
@@ -259,13 +315,14 @@ export function MobileWorkoutDay({ day, lastWorkout, onSave, onBack }: MobileWor
                         variant="outline"
                         className="h-10 w-10 p-0"
                         onClick={() => {
-                          const currentWeight = Number.parseFloat(set.weight) || 0
+                          const currentWeight =
+                            Number.parseFloat(set.weight) || 0;
                           updateSet(
                             currentExerciseIndex,
                             setIndex,
                             "weight",
-                            Math.max(0, currentWeight - 2.5).toString(),
-                          )
+                            Math.max(0, currentWeight - 2.5).toString()
+                          );
                         }}
                       >
                         <Minus className="w-4 h-4" />
@@ -275,15 +332,28 @@ export function MobileWorkoutDay({ day, lastWorkout, onSave, onBack }: MobileWor
                         step="0.5"
                         className="text-center h-10"
                         value={set.weight}
-                        onChange={(e) => updateSet(currentExerciseIndex, setIndex, "weight", e.target.value)}
+                        onChange={(e) =>
+                          updateSet(
+                            currentExerciseIndex,
+                            setIndex,
+                            "weight",
+                            e.target.value
+                          )
+                        }
                       />
                       <Button
                         size="sm"
                         variant="outline"
                         className="h-10 w-10 p-0"
                         onClick={() => {
-                          const currentWeight = Number.parseFloat(set.weight) || 0
-                          updateSet(currentExerciseIndex, setIndex, "weight", (currentWeight + 2.5).toString())
+                          const currentWeight =
+                            Number.parseFloat(set.weight) || 0;
+                          updateSet(
+                            currentExerciseIndex,
+                            setIndex,
+                            "weight",
+                            (currentWeight + 2.5).toString()
+                          );
                         }}
                       >
                         <Plus className="w-4 h-4" />
@@ -299,8 +369,13 @@ export function MobileWorkoutDay({ day, lastWorkout, onSave, onBack }: MobileWor
                         variant="outline"
                         className="h-10 w-10 p-0"
                         onClick={() => {
-                          const currentReps = Number.parseInt(set.reps) || 0
-                          updateSet(currentExerciseIndex, setIndex, "reps", Math.max(0, currentReps - 1).toString())
+                          const currentReps = Number.parseInt(set.reps) || 0;
+                          updateSet(
+                            currentExerciseIndex,
+                            setIndex,
+                            "reps",
+                            Math.max(0, currentReps - 1).toString()
+                          );
                         }}
                       >
                         <Minus className="w-4 h-4" />
@@ -309,15 +384,27 @@ export function MobileWorkoutDay({ day, lastWorkout, onSave, onBack }: MobileWor
                         type="number"
                         className="text-center h-10"
                         value={set.reps}
-                        onChange={(e) => updateSet(currentExerciseIndex, setIndex, "reps", e.target.value)}
+                        onChange={(e) =>
+                          updateSet(
+                            currentExerciseIndex,
+                            setIndex,
+                            "reps",
+                            e.target.value
+                          )
+                        }
                       />
                       <Button
                         size="sm"
                         variant="outline"
                         className="h-10 w-10 p-0"
                         onClick={() => {
-                          const currentReps = Number.parseInt(set.reps) || 0
-                          updateSet(currentExerciseIndex, setIndex, "reps", (currentReps + 1).toString())
+                          const currentReps = Number.parseInt(set.reps) || 0;
+                          updateSet(
+                            currentExerciseIndex,
+                            setIndex,
+                            "reps",
+                            (currentReps + 1).toString()
+                          );
                         }}
                       >
                         <Plus className="w-4 h-4" />
@@ -341,6 +428,16 @@ export function MobileWorkoutDay({ day, lastWorkout, onSave, onBack }: MobileWor
             <ArrowLeft className="w-4 h-4 mr-2" />
             Anterior
           </Button>
+
+          <Button
+            variant="outline"
+            onClick={() => setShowRestTimer(true)}
+            className="mx-2 px-3"
+            title="Iniciar descanso"
+          >
+            <Timer className="w-4 h-4" />
+          </Button>
+
           <Button
             variant="outline"
             disabled={currentExerciseIndex === day.exercises.length - 1}
@@ -364,7 +461,9 @@ export function MobileWorkoutDay({ day, lastWorkout, onSave, onBack }: MobileWor
             <SheetContent side="bottom" className="h-[80vh]">
               <SheetHeader>
                 <SheetTitle>Cardio</SheetTitle>
-                <SheetDescription>Registra tu actividad cardiovascular</SheetDescription>
+                <SheetDescription>
+                  Registra tu actividad cardiovascular
+                </SheetDescription>
               </SheetHeader>
               <div className="space-y-4 mt-6">
                 <div>
@@ -372,7 +471,12 @@ export function MobileWorkoutDay({ day, lastWorkout, onSave, onBack }: MobileWor
                   <Input
                     placeholder="Caminata, bici, etc."
                     value={cardioData.type}
-                    onChange={(e) => setCardioData((prev) => ({ ...prev, type: e.target.value }))}
+                    onChange={(e) =>
+                      setCardioData((prev) => ({
+                        ...prev,
+                        type: e.target.value,
+                      }))
+                    }
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -382,7 +486,12 @@ export function MobileWorkoutDay({ day, lastWorkout, onSave, onBack }: MobileWor
                       type="number"
                       placeholder="0"
                       value={cardioData.duration}
-                      onChange={(e) => setCardioData((prev) => ({ ...prev, duration: e.target.value }))}
+                      onChange={(e) =>
+                        setCardioData((prev) => ({
+                          ...prev,
+                          duration: e.target.value,
+                        }))
+                      }
                     />
                   </div>
                   <div>
@@ -392,7 +501,12 @@ export function MobileWorkoutDay({ day, lastWorkout, onSave, onBack }: MobileWor
                       step="0.1"
                       placeholder="0.0"
                       value={cardioData.distance}
-                      onChange={(e) => setCardioData((prev) => ({ ...prev, distance: e.target.value }))}
+                      onChange={(e) =>
+                        setCardioData((prev) => ({
+                          ...prev,
+                          distance: e.target.value,
+                        }))
+                      }
                     />
                   </div>
                 </div>
@@ -401,7 +515,12 @@ export function MobileWorkoutDay({ day, lastWorkout, onSave, onBack }: MobileWor
                   <Textarea
                     placeholder="Detalles adicionales..."
                     value={cardioData.notes}
-                    onChange={(e) => setCardioData((prev) => ({ ...prev, notes: e.target.value }))}
+                    onChange={(e) =>
+                      setCardioData((prev) => ({
+                        ...prev,
+                        notes: e.target.value,
+                      }))
+                    }
                   />
                 </div>
               </div>
@@ -418,7 +537,9 @@ export function MobileWorkoutDay({ day, lastWorkout, onSave, onBack }: MobileWor
             <SheetContent side="bottom" className="h-[60vh]">
               <SheetHeader>
                 <SheetTitle>Notas del Entrenamiento</SheetTitle>
-                <SheetDescription>¿Cómo te sentiste? ¿Alguna observación?</SheetDescription>
+                <SheetDescription>
+                  ¿Cómo te sentiste? ¿Alguna observación?
+                </SheetDescription>
               </SheetHeader>
               <div className="mt-6">
                 <Textarea
@@ -433,6 +554,11 @@ export function MobileWorkoutDay({ day, lastWorkout, onSave, onBack }: MobileWor
           </Sheet>
         </div>
       </div>
+      <RestTimer
+        isVisible={showRestTimer}
+        onClose={() => setShowRestTimer(false)}
+        defaultDuration={restDuration}
+      />
     </div>
-  )
+  );
 }

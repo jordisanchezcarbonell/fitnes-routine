@@ -41,6 +41,18 @@ export function AuthModal({ open, onOpenChange, onSuccess }: AuthModalProps) {
     name: "",
   });
 
+  // Añadir después de los estados existentes
+  const [errors, setErrors] = useState({
+    signin: { email: "", password: "" },
+    signup: { email: "", password: "", confirmPassword: "", name: "" },
+  });
+
+  // Función de validación
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -52,9 +64,22 @@ export function AuthModal({ open, onOpenChange, onSuccess }: AuthModalProps) {
       );
 
       if (error) {
+        let errorMessage = error;
+
+        // Traducir errores comunes
+        if (error.includes("Invalid login credentials")) {
+          errorMessage = "Email o contraseña incorrectos";
+        } else if (error.includes("Email not confirmed")) {
+          errorMessage = "Debes confirmar tu email antes de iniciar sesión";
+        } else if (error.includes("Too many requests")) {
+          errorMessage = "Demasiados intentos. Espera unos minutos";
+        } else if (error.includes("Invalid email")) {
+          errorMessage = "El formato del email no es válido";
+        }
+
         toast({
           title: "Error al iniciar sesión",
-          description: error,
+          description: errorMessage,
           variant: "destructive",
         });
         return;
@@ -67,11 +92,14 @@ export function AuthModal({ open, onOpenChange, onSuccess }: AuthModalProps) {
         });
         onSuccess();
         onOpenChange(false);
+        // Limpiar formulario
+        setSignInData({ email: "", password: "" });
       }
     } catch (error) {
       toast({
-        title: "Error",
-        description: "Ocurrió un error inesperado",
+        title: "Error de conexión",
+        description:
+          "No se pudo conectar con el servidor. Verifica tu conexión a internet.",
         variant: "destructive",
       });
     } finally {
@@ -84,8 +112,9 @@ export function AuthModal({ open, onOpenChange, onSuccess }: AuthModalProps) {
 
     if (signUpData.password !== signUpData.confirmPassword) {
       toast({
-        title: "Error",
-        description: "Las contraseñas no coinciden",
+        title: "Las contraseñas no coinciden",
+        description:
+          "Asegúrate de escribir la misma contraseña en ambos campos",
         variant: "destructive",
       });
       return;
@@ -93,8 +122,17 @@ export function AuthModal({ open, onOpenChange, onSuccess }: AuthModalProps) {
 
     if (signUpData.password.length < 6) {
       toast({
-        title: "Error",
+        title: "Contraseña muy corta",
         description: "La contraseña debe tener al menos 6 caracteres",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!signUpData.email.includes("@")) {
+      toast({
+        title: "Email inválido",
+        description: "Por favor ingresa un email válido",
         variant: "destructive",
       });
       return;
@@ -110,9 +148,22 @@ export function AuthModal({ open, onOpenChange, onSuccess }: AuthModalProps) {
       );
 
       if (error) {
+        let errorMessage = error;
+
+        // Traducir errores comunes
+        if (error.includes("User already registered")) {
+          errorMessage = "Ya existe una cuenta con este email";
+        } else if (error.includes("Password should be at least")) {
+          errorMessage = "La contraseña debe tener al menos 6 caracteres";
+        } else if (error.includes("Invalid email")) {
+          errorMessage = "El formato del email no es válido";
+        } else if (error.includes("Signup is disabled")) {
+          errorMessage = "El registro está temporalmente deshabilitado";
+        }
+
         toast({
           title: "Error al crear cuenta",
-          description: error,
+          description: errorMessage,
           variant: "destructive",
         });
         return;
@@ -120,8 +171,10 @@ export function AuthModal({ open, onOpenChange, onSuccess }: AuthModalProps) {
 
       if (user) {
         toast({
-          title: "¡Cuenta creada!",
-          description: "Revisa tu email para confirmar tu cuenta.",
+          title: "¡Cuenta creada exitosamente!",
+          description:
+            "Revisa tu email para confirmar tu cuenta y luego inicia sesión.",
+          duration: 6000,
         });
         setActiveTab("signin");
         setSignUpData({
@@ -130,11 +183,14 @@ export function AuthModal({ open, onOpenChange, onSuccess }: AuthModalProps) {
           confirmPassword: "",
           name: "",
         });
+        // Pre-llenar el email en el login
+        setSignInData({ email: signUpData.email, password: "" });
       }
     } catch (error) {
       toast({
-        title: "Error",
-        description: "Ocurrió un error inesperado",
+        title: "Error de conexión",
+        description:
+          "No se pudo conectar con el servidor. Verifica tu conexión a internet.",
         variant: "destructive",
       });
     } finally {
@@ -168,14 +224,27 @@ export function AuthModal({ open, onOpenChange, onSuccess }: AuthModalProps) {
                     id="signin-email"
                     type="email"
                     placeholder="tu@email.com"
-                    className="pl-10"
+                    className={`pl-10 ${
+                      errors.signin.email ? "border-red-500" : ""
+                    }`}
                     value={signInData.email}
-                    onChange={(e) =>
-                      setSignInData({ ...signInData, email: e.target.value })
-                    }
+                    onChange={(e) => {
+                      setSignInData({ ...signInData, email: e.target.value });
+                      if (errors.signin.email) {
+                        setErrors((prev) => ({
+                          ...prev,
+                          signin: { ...prev.signin, email: "" },
+                        }));
+                      }
+                    }}
                     required
                   />
                 </div>
+                {errors.signin.email && (
+                  <p className="text-sm text-red-500 mt-1">
+                    {errors.signin.email}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
