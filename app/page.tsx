@@ -1,15 +1,34 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Progress } from "@/components/ui/progress"
-import { Calendar, Dumbbell, TrendingUp, Target, Clock, Activity, Wifi, WifiOff, AlertCircle } from "lucide-react"
-import { WorkoutDay } from "@/components/workout-day"
-import { StatsView } from "@/components/stats-view"
-import { HistoryView } from "@/components/history-view"
+import { useState, useEffect } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
+import {
+  Calendar,
+  Dumbbell,
+  TrendingUp,
+  Target,
+  Clock,
+  Activity,
+  Wifi,
+  WifiOff,
+  AlertCircle,
+  LogIn,
+} from "lucide-react";
+import { WorkoutDay } from "@/components/workout-day";
+import { StatsView } from "@/components/stats-view";
+import { HistoryView } from "@/components/history-view";
+import { AuthModal } from "@/components/auth-modal";
+import { UserMenu } from "@/components/user-menu";
 import {
   getWorkoutsFromDatabase,
   saveWorkoutToDatabase,
@@ -17,10 +36,11 @@ import {
   testDatabaseConnection,
   type WorkoutData,
   type WorkoutWithId,
-} from "@/lib/database"
-import { useToast } from "@/hooks/use-toast"
-import { MobileDashboard } from "@/components/mobile-dashboard"
-import { useMobile } from "@/hooks/use-mobile"
+} from "@/lib/database";
+import { getCurrentUser, onAuthStateChange, type AuthUser } from "@/lib/auth";
+import { useToast } from "@/hooks/use-toast";
+import { MobileDashboard } from "@/components/mobile-dashboard";
+import { useMobile } from "@/hooks/use-mobile";
 
 const WORKOUT_DAYS = [
   {
@@ -68,7 +88,11 @@ const WORKOUT_DAYS = [
       { name: "Curl femoral tumbado", targetReps: "12-15", sets: 3 },
       { name: "Elevaciones de talón de pie", targetReps: "15-20", sets: 3 },
       { name: "Zancadas con mancuernas", targetReps: "20 pasos", sets: 3 },
-      { name: "Finisher: Extensión cuádriceps drop set", targetReps: "25", sets: 2 },
+      {
+        name: "Finisher: Extensión cuádriceps drop set",
+        targetReps: "25",
+        sets: 2,
+      },
     ],
   },
   {
@@ -77,7 +101,11 @@ const WORKOUT_DAYS = [
     description: "Hombros y Pecho Accesorio",
     color: "bg-red-400",
     exercises: [
-      { name: "Press hombros con mancuernas sentado", targetReps: "10-12", sets: 4 },
+      {
+        name: "Press hombros con mancuernas sentado",
+        targetReps: "10-12",
+        sets: 4,
+      },
       { name: "Elevaciones laterales sentado", targetReps: "15-20", sets: 4 },
       { name: "Aperturas pec deck o mancuernas", targetReps: "15", sets: 3 },
       { name: "Fondos asistidos", targetReps: "10-12", sets: 3 },
@@ -94,10 +122,18 @@ const WORKOUT_DAYS = [
     exercises: [
       { name: "Remo en máquina agarre neutro", targetReps: "10-12", sets: 3 },
       { name: "Remo inclinado con barra", targetReps: "10", sets: 3 },
-      { name: "Jalones al pecho con cuerda/estrecho", targetReps: "12", sets: 3 },
+      {
+        name: "Jalones al pecho con cuerda/estrecho",
+        targetReps: "12",
+        sets: 3,
+      },
       { name: "Curl de bíceps con barra EZ", targetReps: "10", sets: 3 },
       { name: "Curl concentrado", targetReps: "12", sets: 3 },
-      { name: "Curl tipo 21 / bomba final en cable", targetReps: "21", sets: 3 },
+      {
+        name: "Curl tipo 21 / bomba final en cable",
+        targetReps: "21",
+        sets: 3,
+      },
       { name: "Face pulls / Reverse Pec Deck", targetReps: "15", sets: 3 },
       { name: "Encogimientos con barra", targetReps: "15", sets: 3 },
     ],
@@ -129,107 +165,125 @@ const WORKOUT_DAYS = [
       { name: "Planchas laterales", targetReps: "30 seg/lado", sets: 3 },
     ],
   },
-]
+];
 
 export default function FitnessTracker() {
-  const isMobile = useMobile()
-  const [workouts, setWorkouts] = useState<WorkoutWithId[]>([])
-  const [selectedDay, setSelectedDay] = useState<number | null>(null)
-  const [activeTab, setActiveTab] = useState("dashboard")
-  const [isOnline, setIsOnline] = useState(true)
-  const [isLoading, setIsLoading] = useState(true)
-  const [dbConnected, setDbConnected] = useState(false)
-  const { toast } = useToast()
+  const isMobile = useMobile();
+  const [workouts, setWorkouts] = useState<WorkoutWithId[]>([]);
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState("dashboard");
+  const [isOnline, setIsOnline] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [dbConnected, setDbConnected] = useState(false);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const { toast } = useToast();
 
   const handleSelectDay = (dayId: number) => {
-    setSelectedDay(dayId)
-    setActiveTab("workout")
-  }
+    setSelectedDay(dayId);
+    setActiveTab("workout");
+  };
 
   // Cargar entrenamientos al iniciar
   useEffect(() => {
-    initializeApp()
+    initializeApp();
 
     // Detectar estado de conexión
-    const handleOnline = () => setIsOnline(true)
-    const handleOffline = () => setIsOnline(false)
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
 
-    window.addEventListener("online", handleOnline)
-    window.addEventListener("offline", handleOffline)
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    // Escuchar cambios de autenticación
+    const {
+      data: { subscription },
+    } = onAuthStateChange((user) => {
+      setUser(user);
+      if (user) {
+        loadWorkouts(); // Recargar entrenamientos cuando el usuario se loguee
+      }
+    });
 
     return () => {
-      window.removeEventListener("online", handleOnline)
-      window.removeEventListener("offline", handleOffline)
-    }
-  }, [])
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const initializeApp = async () => {
-    setIsLoading(true)
+    setIsLoading(true);
 
-    // Primero verificar conexión a la base de datos
-    const dbConnection = await testDatabaseConnection()
-    setDbConnected(dbConnection)
+    // Verificar usuario actual
+    const currentUser = await getCurrentUser();
+    setUser(currentUser);
+
+    // Verificar conexión a la base de datos
+    const dbConnection = await testDatabaseConnection();
+    setDbConnected(dbConnection);
 
     if (dbConnection) {
-      await loadWorkouts()
+      await loadWorkouts();
     } else {
       // Si no hay conexión a DB, cargar desde localStorage
-      loadLocalWorkouts()
+      loadLocalWorkouts();
     }
 
-    setIsLoading(false)
-  }
+    setIsLoading(false);
+  };
 
   const loadWorkouts = async () => {
     try {
-      const dbWorkouts = await getWorkoutsFromDatabase()
-      setWorkouts(dbWorkouts)
+      const dbWorkouts = await getWorkoutsFromDatabase();
+      setWorkouts(dbWorkouts);
 
       // También cargar desde localStorage como respaldo
-      const localWorkouts = localStorage.getItem("fitness-workouts")
+      const localWorkouts = localStorage.getItem("fitness-workouts");
       if (localWorkouts && dbWorkouts.length === 0) {
-        const parsedLocal = JSON.parse(localWorkouts)
-        setWorkouts(parsedLocal)
+        const parsedLocal = JSON.parse(localWorkouts);
+        setWorkouts(parsedLocal);
       }
     } catch (error) {
-      console.error("Error loading workouts:", error)
+      console.error("Error loading workouts:", error);
       toast({
         title: "Error de conexión",
-        description: "No se pudieron cargar los entrenamientos. Usando datos locales.",
+        description:
+          "No se pudieron cargar los entrenamientos. Usando datos locales.",
         variant: "destructive",
-      })
+      });
 
       // Fallback a localStorage
-      loadLocalWorkouts()
+      loadLocalWorkouts();
     }
-  }
+  };
 
   const loadLocalWorkouts = () => {
-    const localWorkouts = localStorage.getItem("fitness-workouts")
+    const localWorkouts = localStorage.getItem("fitness-workouts");
     if (localWorkouts) {
       try {
-        setWorkouts(JSON.parse(localWorkouts))
+        setWorkouts(JSON.parse(localWorkouts));
       } catch (error) {
-        console.error("Error parsing local workouts:", error)
-        setWorkouts([])
+        console.error("Error parsing local workouts:", error);
+        setWorkouts([]);
       }
     }
-  }
+  };
 
   const saveWorkout = async (workoutData: WorkoutData) => {
     try {
       if (dbConnected) {
         // Guardar en la base de datos
-        const workoutId = await saveWorkoutToDatabase(workoutData)
+        const workoutId = await saveWorkoutToDatabase(workoutData);
 
         if (workoutId) {
           // Recargar entrenamientos desde la base de datos
-          await loadWorkouts()
+          await loadWorkouts();
           toast({
             title: "¡Entrenamiento guardado!",
             description: "Tu progreso se ha sincronizado correctamente.",
-          })
-          return
+          });
+          return;
         }
       }
 
@@ -238,11 +292,11 @@ export default function FitnessTracker() {
         ...workoutData,
         id: Date.now().toString(),
         date: new Date().toISOString(),
-      }
+      };
 
-      const newWorkouts = [workoutWithId, ...workouts]
-      setWorkouts(newWorkouts)
-      localStorage.setItem("fitness-workouts", JSON.stringify(newWorkouts))
+      const newWorkouts = [workoutWithId, ...workouts];
+      setWorkouts(newWorkouts);
+      localStorage.setItem("fitness-workouts", JSON.stringify(newWorkouts));
 
       toast({
         title: dbConnected ? "Error al sincronizar" : "Guardado localmente",
@@ -250,42 +304,53 @@ export default function FitnessTracker() {
           ? "Se guardó localmente. Reintentará sincronizar automáticamente."
           : "El entrenamiento se guardó en tu dispositivo.",
         variant: dbConnected ? "destructive" : "default",
-      })
+      });
     } catch (error) {
-      console.error("Error saving workout:", error)
+      console.error("Error saving workout:", error);
       toast({
         title: "Error al guardar",
         description: "No se pudo guardar el entrenamiento. Inténtalo de nuevo.",
         variant: "destructive",
-      })
+      });
     }
-  }
+  };
 
   const getLastWorkout = async (dayId: number) => {
     try {
       if (dbConnected) {
-        const lastWorkout = await getLastWorkoutForDay(dayId)
-        return lastWorkout
+        const lastWorkout = await getLastWorkoutForDay(dayId);
+        return lastWorkout;
       }
     } catch (error) {
-      console.error("Error getting last workout from DB:", error)
+      console.error("Error getting last workout from DB:", error);
     }
 
     // Fallback a búsqueda local
     return workouts
       .filter((w) => w.dayId === dayId)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
-  }
+      .sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      )[0];
+  };
 
   const getWeeklyProgress = () => {
     const thisWeek = workouts.filter((w) => {
-      const workoutDate = new Date(w.date)
-      const weekAgo = new Date()
-      weekAgo.setDate(weekAgo.getDate() - 7)
-      return workoutDate >= weekAgo
-    })
-    return (thisWeek.length / 6) * 100 // 6 días de rutina
-  }
+      const workoutDate = new Date(w.date);
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      return workoutDate >= weekAgo;
+    });
+    return (thisWeek.length / 6) * 100; // 6 días de rutina
+  };
+
+  const handleAuthSuccess = () => {
+    loadWorkouts(); // Recargar entrenamientos después del login
+  };
+
+  const handleSignOut = () => {
+    setUser(null);
+    loadWorkouts(); // Recargar entrenamientos después del logout
+  };
 
   if (isLoading) {
     return (
@@ -295,7 +360,7 @@ export default function FitnessTracker() {
           <p className="text-slate-600">Cargando entrenamientos...</p>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -304,8 +369,12 @@ export default function FitnessTracker() {
         <header className="mb-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl md:text-4xl font-bold text-slate-800 mb-1">Rutina Gym Jordi</h1>
-              <p className="text-sm md:text-base text-slate-600">Push / Pull / Legs + Core</p>
+              <h1 className="text-2xl md:text-4xl font-bold text-slate-800 mb-1">
+                Rutina Gym Jordi
+              </h1>
+              <p className="text-sm md:text-base text-slate-600">
+                Push / Pull / Legs + Core
+              </p>
             </div>
             <div className="flex items-center space-x-2">
               {isOnline ? (
@@ -325,11 +394,27 @@ export default function FitnessTracker() {
                   <span className="hidden sm:inline">Modo local</span>
                 </Badge>
               )}
+              {user ? (
+                <UserMenu user={user} onSignOut={handleSignOut} />
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAuthModal(true)}
+                >
+                  <LogIn className="w-4 h-4 mr-2" />
+                  <span className="hidden sm:inline">Iniciar Sesión</span>
+                </Button>
+              )}
             </div>
           </div>
         </header>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          className="space-y-6"
+        >
           <TabsList className="grid w-full grid-cols-4 h-12 mb-4">
             <TabsTrigger value="dashboard" className="text-xs md:text-sm">
               <div className="flex flex-col items-center">
@@ -371,28 +456,36 @@ export default function FitnessTracker() {
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">Entrenamientos</CardTitle>
+                      <CardTitle className="text-sm font-medium">
+                        Entrenamientos
+                      </CardTitle>
                       <Dumbbell className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                      <div className="text-2xl font-bold">{workouts.length}</div>
-                      <p className="text-xs text-muted-foreground">Total completados</p>
+                      <div className="text-2xl font-bold">
+                        {workouts.length}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Total completados
+                      </p>
                     </CardContent>
                   </Card>
 
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">Esta Semana</CardTitle>
+                      <CardTitle className="text-sm font-medium">
+                        Esta Semana
+                      </CardTitle>
                       <Calendar className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold">
                         {
                           workouts.filter((w) => {
-                            const workoutDate = new Date(w.date)
-                            const weekAgo = new Date()
-                            weekAgo.setDate(weekAgo.getDate() - 7)
-                            return workoutDate >= weekAgo
+                            const workoutDate = new Date(w.date);
+                            const weekAgo = new Date();
+                            weekAgo.setDate(weekAgo.getDate() - 7);
+                            return workoutDate >= weekAgo;
                           }).length
                         }
                       </div>
@@ -402,16 +495,21 @@ export default function FitnessTracker() {
 
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">Último Entreno</CardTitle>
+                      <CardTitle className="text-sm font-medium">
+                        Último Entreno
+                      </CardTitle>
                       <Clock className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold">
-                        {workouts.length > 0 ? new Date(workouts[0].date).toLocaleDateString() : "—"}
+                        {workouts.length > 0
+                          ? new Date(workouts[0].date).toLocaleDateString()
+                          : "—"}
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {workouts.length > 0
-                          ? WORKOUT_DAYS.find((d) => d.id === workouts[0].dayId)?.name
+                          ? WORKOUT_DAYS.find((d) => d.id === workouts[0].dayId)
+                              ?.name
                           : "Ninguno aún"}
                       </p>
                     </CardContent>
@@ -419,12 +517,18 @@ export default function FitnessTracker() {
 
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">Progreso</CardTitle>
+                      <CardTitle className="text-sm font-medium">
+                        Progreso
+                      </CardTitle>
                       <TrendingUp className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                      <div className="text-2xl font-bold">{Math.round(getWeeklyProgress())}%</div>
-                      <p className="text-xs text-muted-foreground">Objetivo semanal</p>
+                      <div className="text-2xl font-bold">
+                        {Math.round(getWeeklyProgress())}%
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Objetivo semanal
+                      </p>
                     </CardContent>
                   </Card>
                 </div>
@@ -434,18 +538,33 @@ export default function FitnessTracker() {
                   {WORKOUT_DAYS.map((day) => {
                     const lastWorkout = workouts
                       .filter((w) => w.dayId === day.id)
-                      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
+                      .sort(
+                        (a, b) =>
+                          new Date(b.date).getTime() -
+                          new Date(a.date).getTime()
+                      )[0];
 
                     return (
-                      <Card key={day.id} className="hover:shadow-lg transition-shadow cursor-pointer">
+                      <Card
+                        key={day.id}
+                        className="hover:shadow-lg transition-shadow cursor-pointer"
+                      >
                         <CardHeader>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-2">
-                              <div className={`w-3 h-3 rounded-full ${day.color}`} />
-                              <CardTitle className="text-lg">{day.name}</CardTitle>
+                              <div
+                                className={`w-3 h-3 rounded-full ${day.color}`}
+                              />
+                              <CardTitle className="text-lg">
+                                {day.name}
+                              </CardTitle>
                             </div>
                             {lastWorkout && (
-                              <Badge variant="secondary">{new Date(lastWorkout.date).toLocaleDateString()}</Badge>
+                              <Badge variant="secondary">
+                                {new Date(
+                                  lastWorkout.date
+                                ).toLocaleDateString()}
+                              </Badge>
                             )}
                           </div>
                           <CardDescription>{day.description}</CardDescription>
@@ -456,14 +575,17 @@ export default function FitnessTracker() {
                               <span>Ejercicios:</span>
                               <span>{day.exercises.length}</span>
                             </div>
-                            <Button className="w-full" onClick={() => handleSelectDay(day.id)}>
+                            <Button
+                              className="w-full"
+                              onClick={() => handleSelectDay(day.id)}
+                            >
                               <Activity className="w-4 h-4 mr-2" />
                               Entrenar
                             </Button>
                           </div>
                         </CardContent>
                       </Card>
-                    )
+                    );
                   })}
                 </div>
               </>
@@ -477,19 +599,26 @@ export default function FitnessTracker() {
                 lastWorkout={
                   workouts
                     .filter((w) => w.dayId === selectedDay)
-                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
+                    .sort(
+                      (a, b) =>
+                        new Date(b.date).getTime() - new Date(a.date).getTime()
+                    )[0]
                 }
                 onSave={saveWorkout}
                 onBack={() => {
-                  setSelectedDay(null)
-                  setActiveTab("dashboard")
+                  setSelectedDay(null);
+                  setActiveTab("dashboard");
                 }}
               />
             ) : (
               <div className="text-center py-12">
                 <Target className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-xl font-semibold mb-2">Selecciona un día de entrenamiento</h3>
-                <p className="text-muted-foreground mb-6">Elige qué rutina quieres realizar hoy</p>
+                <h3 className="text-xl font-semibold mb-2">
+                  Selecciona un día de entrenamiento
+                </h3>
+                <p className="text-muted-foreground mb-6">
+                  Elige qué rutina quieres realizar hoy
+                </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl mx-auto">
                   {WORKOUT_DAYS.map((day) => (
                     <Button
@@ -498,9 +627,13 @@ export default function FitnessTracker() {
                       className="h-20 flex-col"
                       onClick={() => handleSelectDay(day.id)}
                     >
-                      <div className={`w-3 h-3 rounded-full ${day.color} mb-2`} />
+                      <div
+                        className={`w-3 h-3 rounded-full ${day.color} mb-2`}
+                      />
                       <span className="font-semibold">{day.name}</span>
-                      <span className="text-xs text-muted-foreground">{day.description}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {day.description}
+                      </span>
                     </Button>
                   ))}
                 </div>
@@ -509,14 +642,24 @@ export default function FitnessTracker() {
           </TabsContent>
 
           <TabsContent value="history">
-            <HistoryView workouts={workouts} workoutDays={WORKOUT_DAYS} />
+            <HistoryView
+              workouts={workouts}
+              workoutDays={WORKOUT_DAYS}
+              onWorkoutDeleted={loadWorkouts}
+            />
           </TabsContent>
 
           <TabsContent value="stats">
             <StatsView workouts={workouts} workoutDays={WORKOUT_DAYS} />
           </TabsContent>
         </Tabs>
+
+        <AuthModal
+          open={showAuthModal}
+          onOpenChange={setShowAuthModal}
+          onSuccess={handleAuthSuccess}
+        />
       </div>
     </div>
-  )
+  );
 }

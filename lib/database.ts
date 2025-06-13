@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { getCurrentUser } from "./auth";
 
 export interface WorkoutData {
   dayId: number;
@@ -31,10 +32,13 @@ export async function saveWorkoutToDatabase(
   workoutData: WorkoutData
 ): Promise<string | null> {
   try {
+    const user = await getCurrentUser();
+
     // 1. Insertar el entrenamiento principal
     const { data: workout, error: workoutError } = await supabase
       .from("workouts")
       .insert({
+        user_id: user?.id || null,
         day_id: workoutData.dayId,
         day_name: workoutData.dayName,
         notes: workoutData.notes,
@@ -102,14 +106,47 @@ export async function saveWorkoutToDatabase(
   }
 }
 
+// Eliminar entrenamiento
+export async function deleteWorkoutFromDatabase(
+  workoutId: string
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("workouts")
+      .delete()
+      .eq("id", workoutId);
+
+    if (error) {
+      console.error("Error deleting workout:", error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Error in deleteWorkoutFromDatabase:", error);
+    return false;
+  }
+}
+
 // Obtener todos los entrenamientos usando consultas separadas
 export async function getWorkoutsFromDatabase(): Promise<WorkoutWithId[]> {
   try {
-    // 1. Obtener todos los entrenamientos
-    const { data: workouts, error: workoutsError } = await supabase
+    const user = await getCurrentUser();
+
+    // 1. Obtener todos los entrenamientos del usuario
+    let query = supabase
       .from("workouts")
       .select("*")
       .order("date", { ascending: false });
+
+    // Si hay usuario, filtrar por user_id, sino mostrar entrenamientos sin usuario
+    if (user) {
+      query = query.or(`user_id.eq.${user.id},user_id.is.null`);
+    } else {
+      query = query.is("user_id", null);
+    }
+
+    const { data: workouts, error: workoutsError } = await query;
 
     if (workoutsError) {
       console.error("Error fetching workouts:", workoutsError);
@@ -196,14 +233,24 @@ export async function getLastWorkoutForDay(
   dayId: number
 ): Promise<WorkoutWithId | null> {
   try {
+    const user = await getCurrentUser();
+
     // 1. Obtener el último entrenamiento del día
-    const { data: workout, error: workoutError } = await supabase
+    let query = supabase
       .from("workouts")
       .select("*")
       .eq("day_id", dayId)
       .order("date", { ascending: false })
-      .limit(1)
-      .single();
+      .limit(1);
+
+    // Si hay usuario, filtrar por user_id, sino mostrar entrenamientos sin usuario
+    if (user) {
+      query = query.or(`user_id.eq.${user.id},user_id.is.null`);
+    } else {
+      query = query.is("user_id", null);
+    }
+
+    const { data: workout, error: workoutError } = await query.single();
 
     if (workoutError || !workout) {
       return null;
